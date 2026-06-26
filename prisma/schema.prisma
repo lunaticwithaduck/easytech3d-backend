@@ -1,0 +1,329 @@
+// EasyTech3D backend — catalog domain (Phase 0/1).
+// Money is INTEGER BGN CENTS (e.g. 2490 = 24.90 лв), matching the storefront's ShopProduct types.
+// EUR is display-only on the FE (dual лв/€). Commerce / custom-print / customer models land in later phases.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id              String   @id @default(cuid())
+  handle          String   @unique
+  title           String
+  vendor          String   @default("")
+  descriptionHtml String   @default("")
+  tags            String[] @default([])
+  seoTitle        String?
+  seoDescription  String?
+
+  // Denormalized price summary (cents) for fast listing reads.
+  priceCents       Int
+  priceMinCents    Int
+  priceMaxCents    Int
+  compareAtCents   Int?
+  available        Boolean @default(true)
+
+  options     ProductOption[]
+  images      ProductImage[]
+  variants    Variant[]
+  collections CollectionProduct[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([available])
+}
+
+model ProductOption {
+  id        String   @id @default(cuid())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  name      String
+  position  Int      @default(1)
+  values    String[] @default([])
+
+  @@unique([productId, position])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  src       String
+  alt       String  @default("")
+  width     Int     @default(1000)
+  height    Int     @default(1000)
+  position  Int     @default(1)
+
+  @@index([productId, position])
+}
+
+model Variant {
+  id             String  @id @default(cuid())
+  product        Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId      String
+  sku            String  @unique
+  title          String  @default("Default Title")
+  priceCents     Int
+  compareAtCents Int?
+  available      Boolean @default(true)
+  options        String[] @default([]) // selected option values, in option order
+  imageSrc       String?
+  position       Int     @default(1)
+
+  inventory InventoryLevel[]
+  cartItems CartItem[]
+
+  @@index([productId])
+}
+
+// ---- Cart (Phase 2) — server cart keyed by an httpOnly cookie on the storefront ----------------
+
+model Cart {
+  id        String     @id @default(cuid())
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  cartId    String
+  variant   Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variantId String
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+
+  @@unique([cartId, variantId])
+  @@index([cartId])
+}
+
+// ---- Orders / checkout (Phase 2b) --------------------------------------------------------------
+
+enum ShippingMethod {
+  ECONT
+  SPEEDY
+}
+
+enum PaymentMethod {
+  COD // cash on delivery (наложен платеж)
+  CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT // card order awaiting the payment provider (seam)
+  CONFIRMED // COD or paid card
+  CANCELLED
+  FULFILLED
+}
+
+model Order {
+  id          String @id @default(cuid())
+  orderNumber Int    @unique @default(autoincrement())
+
+  email     String
+  firstName String
+  lastName  String
+  phone     String
+
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  customerId String?
+
+  shippingCity       String
+  shippingPostalCode String
+  shippingAddress1   String
+  shippingAddress2   String?
+  shippingProvince   String?
+
+  // Delivery target: to the customer's address, or to a courier office (Econt office/Econtomat).
+  deliveryType String  @default("ADDRESS") // ADDRESS | OFFICE
+  officeCode   String? // courier office code (on the shipment label) when deliveryType=OFFICE
+  officeName   String?
+
+  shippingMethod ShippingMethod
+  shippingCents  Int
+  subtotalCents  Int
+  taxCents       Int // VAT (20%) included in the prices; stored for display
+  totalCents     Int
+
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(PENDING)
+  status        OrderStatus   @default(CONFIRMED)
+
+  items OrderLineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---- Customer accounts (Phase 5) --------------------------------------------------------------
+
+model Customer {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String?
+
+  orders   Order[]
+  sessions CustomerSession[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CustomerSession {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}
+
+// ---- Inbound forms (Phase 6) ------------------------------------------------------------------
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  firstName String?
+  lastName  String?
+  createdAt DateTime @default(now())
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model BackInStockRequest {
+  id            String   @id @default(cuid())
+  email         String
+  productHandle String
+  variantId     String?
+  createdAt     DateTime @default(now())
+
+  @@index([productHandle])
+}
+
+// ---- Custom 3D-print quote requests (Phase 3) -------------------------------------------------
+
+enum PrintQuoteStatus {
+  NEW
+  QUOTED
+  ACCEPTED
+  REJECTED
+}
+
+model PrintQuote {
+  id          String @id @default(cuid())
+  quoteNumber Int    @unique @default(autoincrement())
+
+  name  String
+  email String
+  phone String
+
+  fileNames      String[]
+  material       String
+  color          String
+  infill         Int
+  totalVolumeCm3 Float
+  totalWeightG   Float
+  dims           String
+  qty            Int
+
+  unitPriceCents  Int
+  totalPriceCents Int
+  notes           String?
+
+  files PrintQuoteFile[]
+
+  status    PrintQuoteStatus @default(NEW)
+  createdAt DateTime         @default(now())
+}
+
+// Persisted STL uploads for a print quote. Bytes live in object storage (local-disk driver now,
+// S3 seam later — see StorageService); this row keeps the lookup key + display metadata.
+model PrintQuoteFile {
+  id         String     @id @default(cuid())
+  quote      PrintQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quoteId    String
+  fileName   String
+  storageKey String
+  sizeBytes  Int
+  createdAt  DateTime   @default(now())
+
+  @@index([quoteId])
+}
+
+model OrderLineItem {
+  id             String  @id @default(cuid())
+  order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId        String
+  variantId      String
+  sku            String
+  productHandle  String
+  productTitle   String
+  variantTitle   String
+  unitPriceCents Int
+  quantity       Int
+  lineTotalCents Int
+  imageSrc       String?
+
+  @@index([orderId])
+}
+
+// Per-variant stock at each fulfilment location (Sofia warehouse / Speedy / Ekont).
+model InventoryLevel {
+  id        String  @id @default(cuid())
+  variant   Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variantId String
+  location  String // "sofia" | "speedy" | "ekont"
+  quantity  Int     @default(0)
+
+  @@unique([variantId, location])
+}
+
+model Collection {
+  id              String  @id @default(cuid())
+  handle          String  @unique
+  title           String
+  descriptionHtml String  @default("")
+  imageSrc        String?
+  imageAlt        String?
+  position        Int     @default(0)
+
+  products CollectionProduct[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Join with manual ordering (Shopify collection order is meaningful).
+model CollectionProduct {
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  collectionId String
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId    String
+  position     Int        @default(0)
+
+  @@id([collectionId, productId])
+  @@index([productId])
+}

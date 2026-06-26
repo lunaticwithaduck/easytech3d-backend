@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+*.tsbuildinfo
+
+# Prisma
+prisma/*.db
+
+# misc
+.DS_Store
+
+# Local object storage (STL uploads) — never commit user files
+storage/
