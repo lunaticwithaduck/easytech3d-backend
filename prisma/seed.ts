@@ -1,14 +1,18 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'csv-parse/sync';
-import { PrismaClient } from '@prisma/client';
 import { type SeedCollection, type SeedProduct, type SeedVariant, writeCatalog } from './catalog-writer';
 
 // Seed the catalog from the Shopify admin CSV exports (products + inventory) and the still-live
 // storefront's collections JSON. Faithful TS port of tools/extract-catalog.py in the FE repo.
 // Money → integer BGN cents. Only ACTIVE products (the 149 live on the storefront).
+//
+// `--dump <file>` writes the normalized catalog to JSON instead of the DB — that is how
+// prisma/data/catalog-snapshot.json (read by seed-snapshot.ts) is regenerated:
+//   SEED_CSV_DIR=~/Downloads tsx prisma/seed.ts --dump prisma/data/catalog-snapshot.json
 
-const prisma = new PrismaClient();
+const dumpIdx = process.argv.indexOf('--dump');
+const DUMP_FILE = dumpIdx === -1 ? null : process.argv[dumpIdx + 1];
 
 const CSV_DIR = process.env.SEED_CSV_DIR || join(process.env.HOME || '', "Desktop/easytech3d csv's");
 const STORE = process.env.SEED_STORE_URL || 'https://www.easytech3d.com';
@@ -200,12 +204,23 @@ async function main(): Promise<void> {
   const collections = await loadCollections(activeHandles);
   console.log(`  ${collections.length} collections`);
 
-  await writeCatalog(prisma, products, collections);
+  if (DUMP_FILE) {
+    writeFileSync(DUMP_FILE, `${JSON.stringify({ products, collections })}\n`);
+    console.log(`Wrote ${DUMP_FILE}`);
+    return;
+  }
+
+  // Loaded lazily: --dump must work without a generated Prisma client.
+  const { PrismaClient } = await import('@prisma/client');
+  const prisma = new PrismaClient();
+  try {
+    await writeCatalog(prisma, products, collections);
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
