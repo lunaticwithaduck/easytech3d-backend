@@ -10,4 +10,4 @@ prisma/*.db
 .DS_Store
 
 # Local object storage (STL uploads) — never commit user files
-storage/
+/storage/
