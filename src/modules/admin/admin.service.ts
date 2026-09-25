@@ -14,9 +14,13 @@ export class AdminService {
   ) {}
 
   async stats() {
-    const [revenue, ordersCount, quotesCount, messagesCount, subscribersCount, backInStockCount, recentOrders, recentQuotes] =
+    const [revenueByCurrency, ordersCount, quotesCount, messagesCount, subscribersCount, backInStockCount, recentOrders, recentQuotes] =
       await Promise.all([
-        this.prisma.order.aggregate({ _sum: { totalCents: true }, where: { status: { not: 'CANCELLED' } } }),
+        this.prisma.order.groupBy({
+          by: ['currency'],
+          _sum: { totalCents: true },
+          where: { status: { not: 'CANCELLED' } },
+        }),
         this.prisma.order.count(),
         this.prisma.printQuote.count(),
         this.prisma.contactMessage.count(),
@@ -26,7 +30,13 @@ export class AdminService {
         this.prisma.printQuote.findMany({ orderBy: { createdAt: 'desc' }, take: 5 }),
       ]);
     return {
-      revenueCents: revenue._sum.totalCents ?? 0,
+      // EUR orders summed as-is; historical BGN orders converted at the fixed rate
+      // 1 EUR = 1.95583 BGN (round half away from zero), then added — see contracts/euro.md.
+      // biome-ignore lint/suspicious/noExplicitAny: groupBy row shape, untyped without a generated Prisma client.
+      revenueCents: revenueByCurrency.reduce((sum: number, row: any) => {
+        const cents = row._sum.totalCents ?? 0;
+        return sum + (row.currency === 'BGN' ? Math.round(cents / 1.95583) : cents);
+      }, 0),
       ordersCount,
       quotesCount,
       messagesCount,
@@ -90,6 +100,7 @@ export class AdminService {
     return {
       id: o.id,
       orderNumber: orderNo(o.orderNumber),
+      currency: o.currency,
       name: `${o.firstName} ${o.lastName}`,
       email: o.email,
       phone: o.phone,

@@ -37,11 +37,11 @@ export class CreatePrintQuoteDto {
 
   @IsNumber()
   @Min(0)
-  unitPrice!: number; // лв
+  unitPrice!: number; // €
 
   @IsNumber()
   @Min(0)
-  totalPrice!: number; // лв
+  totalPrice!: number; // €
 
   @IsString()
   material!: string;

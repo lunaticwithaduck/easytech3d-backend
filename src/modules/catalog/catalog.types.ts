@@ -1,5 +1,5 @@
 // Response contract — mirrors the storefront's src/lib/shopify/types.ts so the FE data layer drops
-// in unchanged. Money is integer BGN cents. Keep this in lockstep with the FE types.
+// in unchanged. Money is integer EUR cents. Keep this in lockstep with the FE types.
 
 export interface ShopImage {
   src: string;

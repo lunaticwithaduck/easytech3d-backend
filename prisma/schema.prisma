@@ -161,6 +161,10 @@ model Order {
   paymentStatus PaymentStatus @default(PENDING)
   status        OrderStatus   @default(CONFIRMED)
 
+  // ISO currency code the order was priced in. 'EUR' for all new orders since the 2026-09-25
+  // migration; 'BGN' only on historical orders imported before the euro switch — never rewritten.
+  currency String @default("EUR")
+
   items OrderLineItem[]
 
   createdAt DateTime @default(now())

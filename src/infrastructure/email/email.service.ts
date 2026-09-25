@@ -45,15 +45,16 @@ export class EmailService {
     }
   }
 
-  private lv(cents: number): string {
-    return `${(cents / 100).toFixed(2)} лв`;
+  // Formats cents as "X.XX €" (or "X.XX лв" for historical BGN orders — new orders are always EUR).
+  private eur(cents: number, currency: 'EUR' | 'BGN' = 'EUR'): string {
+    return `${(cents / 100).toFixed(2)} ${currency === 'BGN' ? 'лв' : '€'}`;
   }
 
   async orderConfirmation(order: ShopOrder): Promise<void> {
     const lines = order.items
       .map(
         (i) =>
-          `  • ${i.productTitle}${i.variantTitle !== 'Default Title' ? ` (${i.variantTitle})` : ''} ×${i.quantity} — ${this.lv(i.lineTotal)}`,
+          `  • ${i.productTitle}${i.variantTitle !== 'Default Title' ? ` (${i.variantTitle})` : ''} ×${i.quantity} — ${this.eur(i.lineTotal, order.currency)}`,
       )
       .join('\n');
     await this.deliver({
@@ -61,7 +62,7 @@ export class EmailService {
       subject: `Поръчка ${order.orderNumber} — EasyTech3D`,
       text:
         `Здравейте, ${order.firstName}!\n\nБлагодарим за поръчката Ви ${order.orderNumber}.\n\n${lines}\n\n` +
-        `Междинна сума: ${this.lv(order.subtotal)}\nДоставка: ${order.shippingCost === 0 ? 'Безплатно' : this.lv(order.shippingCost)}\nОбщо: ${this.lv(order.total)}\n\n` +
+        `Междинна сума: ${this.eur(order.subtotal, order.currency)}\nДоставка: ${order.shippingCost === 0 ? 'Безплатно' : this.eur(order.shippingCost, order.currency)}\nОбщо: ${this.eur(order.total, order.currency)}\n\n` +
         `Доставка до: ${order.shipping.postalCode} ${order.shipping.city}\nПлащане: ${order.paymentMethod === 'COD' ? 'Наложен платеж' : 'Карта'}\n\nЕкипът на EasyTech3D`,
     });
   }
@@ -70,10 +71,10 @@ export class EmailService {
     await this.deliver({
       to: this.shop,
       replyTo: order.email,
-      subject: `Нова поръчка ${order.orderNumber} (${this.lv(order.total)})`,
+      subject: `Нова поръчка ${order.orderNumber} (${this.eur(order.total, order.currency)})`,
       text:
         `Нова поръчка ${order.orderNumber}\nКлиент: ${order.firstName} ${order.lastName} · ${order.email} · ${order.phone}\n` +
-        `Общо: ${this.lv(order.total)} · ${order.paymentMethod}\nАдрес: ${order.shipping.address1}, ${order.shipping.postalCode} ${order.shipping.city}`,
+        `Общо: ${this.eur(order.total, order.currency)} · ${order.paymentMethod}\nАдрес: ${order.shipping.address1}, ${order.shipping.postalCode} ${order.shipping.city}`,
     });
   }
 
@@ -81,12 +82,12 @@ export class EmailService {
     await this.deliver({
       to: this.shop,
       replyTo: q.email,
-      subject: `Нова 3D заявка ${q.quoteNumber} (${q.totalPrice.toFixed(2)} лв)`,
+      subject: `Нова 3D заявка ${q.quoteNumber} (${q.totalPrice.toFixed(2)} €)`,
       text:
         `3D Принт заявка ${q.quoteNumber}\nКлиент: ${q.name} · ${q.email} · ${q.phone}\n` +
         `Файлове: ${q.fileNames.join(', ')}\nМатериал: ${q.material} / ${q.color}\n` +
         `Запълване: ${q.infill}% · Размери: ${q.dims} mm · Тегло: ${q.totalWeightG} г\n` +
-        `Количество: ${q.qty} · Цена: ${q.totalPrice.toFixed(2)} лв${q.notes ? `\nБележки: ${q.notes}` : ''}`,
+        `Количество: ${q.qty} · Цена: ${q.totalPrice.toFixed(2)} €${q.notes ? `\nБележки: ${q.notes}` : ''}`,
     });
   }
 

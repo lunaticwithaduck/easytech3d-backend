@@ -1,8 +1,9 @@
 import { Prisma } from '@prisma/client';
 import type { ShopCart, ShopCartItem } from './cart.types';
 
-// Free-shipping threshold in BGN cents (settings flag cart_free_shipping_threshold = 105 лв).
-export const FREE_SHIPPING_THRESHOLD_CENTS = 10500;
+// Free-shipping threshold in EUR cents (was 105.00 BGN; converted at the fixed rate
+// 1 EUR = 1.95583 BGN — settings flag cart_free_shipping_threshold = 53.69 €).
+export const FREE_SHIPPING_THRESHOLD_CENTS = 5369;
 
 // A cart item always arrives with its variant → product (+ first image) so we can render the line.
 export const cartInclude = {

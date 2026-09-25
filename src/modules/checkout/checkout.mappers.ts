@@ -7,6 +7,7 @@ export function mapShopOrder(order: Order & { items: OrderLineItem[] }): ShopOrd
   return {
     id: order.id,
     orderNumber: formatOrderNumber(order.orderNumber),
+    currency: order.currency as 'EUR' | 'BGN',
     status: order.status,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,

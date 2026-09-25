@@ -1,6 +1,6 @@
 import type { ShopImage } from '../catalog/catalog.types';
 
-// Cart response contract — mirrored on the FE (src/lib/shopify/types.ts). Money is integer BGN cents.
+// Cart response contract — mirrored on the FE (src/lib/shopify/types.ts). Money is integer EUR cents.
 export interface ShopCartItem {
   id: string;
   variantId: string;

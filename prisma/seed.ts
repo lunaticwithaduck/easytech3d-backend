@@ -5,7 +5,10 @@ import { type SeedCollection, type SeedProduct, type SeedVariant, writeCatalog }
 
 // Seed the catalog from the Shopify admin CSV exports (products + inventory) and the still-live
 // storefront's collections JSON. Faithful TS port of tools/extract-catalog.py in the FE repo.
-// Money → integer BGN cents. Only ACTIVE products (the 149 live on the storefront).
+// Money → integer EUR cents. The CSV export's prices are in SEED_SOURCE_CURRENCY (default 'BGN' —
+// the store's currency before the 2026-01-01 euro switch) and are converted at load time with
+// eurCents = round(bgnCents / 1.95583); set SEED_SOURCE_CURRENCY=EUR for future exports already in
+// euro, which skips conversion. Only ACTIVE products (the 149 live on the storefront).
 //
 // `--dump <file>` writes the normalized catalog to JSON instead of the DB — that is how
 // prisma/data/catalog-snapshot.json (read by seed-snapshot.ts) is regenerated:
@@ -30,10 +33,16 @@ function readCsv(file: string): Row[] {
   return parse(content, { columns: true, skip_empty_lines: true, relax_column_count: true }) as Row[];
 }
 
+// 'BGN' (default) = CSV prices are in BGN, converted to EUR cents below; 'EUR' = already EUR, no conversion.
+const SEED_SOURCE_CURRENCY = (process.env.SEED_SOURCE_CURRENCY || 'BGN').toUpperCase();
+const BGN_PER_EUR = 1.95583; // fixed rate set at Bulgaria's 2026-01-01 euro adoption
+
 const cents = (raw: string | undefined): number | null => {
   const s = (raw ?? '').trim();
   if (!s) return null;
-  return Math.round(Number.parseFloat(s) * 100);
+  const sourceCents = Math.round(Number.parseFloat(s) * 100);
+  // eurCents = round(bgnCents / 1.95583), round half away from zero (contracts/euro.md).
+  return SEED_SOURCE_CURRENCY === 'EUR' ? sourceCents : Math.round(sourceCents / BGN_PER_EUR);
 };
 const cleanSku = (raw: string | undefined): string => (raw ?? '').trim().replace(/^'/, '');
 const intOr0 = (raw: string | undefined): number => {

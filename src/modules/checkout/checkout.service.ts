@@ -6,9 +6,10 @@ import type { CheckoutDto } from './checkout.dto';
 import { mapShopOrder } from './checkout.mappers';
 import type { ShippingMethodInfo, ShopOrder } from './checkout.types';
 
+// Shipping bases in EUR cents (was 5.99 / 6.99 BGN; converted at the fixed rate 1 EUR = 1.95583 BGN).
 const SHIPPING = {
-  ECONT: { label: 'Еконт', base: 599 },
-  SPEEDY: { label: 'Спиди', base: 699 },
+  ECONT: { label: 'Еконт', base: 306 },
+  SPEEDY: { label: 'Спиди', base: 357 },
 } as const;
 
 const VAT_RATE = 0.2; // Bulgaria VAT, included in the prices

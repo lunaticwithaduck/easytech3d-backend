@@ -22,6 +22,7 @@ export interface ShopOrderLineItem {
 export interface ShopOrder {
   id: string;
   orderNumber: string; // display, e.g. "ET-00001"
+  currency: 'EUR' | 'BGN'; // 'BGN' only on historical orders imported before the euro switch
   status: string;
   paymentMethod: string;
   paymentStatus: string;
